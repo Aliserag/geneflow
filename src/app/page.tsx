@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { ethers } from "ethers";
+import contractInfo from "../contracts/GeneFlowEncryptedData.json";
 
 function toHexString(byteArray: Uint8Array) {
   return Array.from(byteArray, (byte) => {
@@ -31,6 +32,9 @@ export default function Home() {
   const [connecting, setConnecting] = useState(false);
   const [encryptedData, setEncryptedData] = useState<Uint8Array | null>(null);
   const [encryptionStatus, setEncryptionStatus] = useState<string | null>(null);
+  const [storing, setStoring] = useState(false);
+  const [contract, setContract] = useState<ethers.Contract | null>(null);
+  const [hasStoredData, setHasStoredData] = useState(false);
 
   // MetaMask connect and key derivation
   const connectWalletAndDeriveKey = async () => {
@@ -46,6 +50,19 @@ export default function Home() {
       const address = accounts[0];
       setWalletAddress(address);
       const signer = await provider.getSigner();
+      
+      // Initialize contract
+      const geneFlowContract = new ethers.Contract(
+        contractInfo.address,
+        contractInfo.abi,
+        signer
+      );
+      setContract(geneFlowContract);
+      
+      // Check if user has stored data
+      const hasData = await geneFlowContract.hasData(address);
+      setHasStoredData(hasData);
+      
       // Sign a fixed message for key derivation
       const message = "GeneFlow Encryption Key Derivation";
       const signature = await signer.signMessage(message);
@@ -63,7 +80,8 @@ export default function Home() {
       );
       setEncryptionKey(key);
       setKeyHex(toHexString(new Uint8Array(hashBuffer)));
-    } catch {
+    } catch (error) {
+      console.error("Connection error:", error);
       alert("MetaMask connection failed");
       setWalletAddress(null);
       setEncryptionKey(null);
@@ -106,8 +124,42 @@ export default function Home() {
       encryptedBytes.set(new Uint8Array(encrypted), iv.length);
       setEncryptedData(encryptedBytes);
       setEncryptionStatus("Encrypted and ready for on-chain storage.");
-    } catch {
+    } catch (error) {
+      console.error("Encryption error:", error);
       setEncryptionStatus("Encryption failed");
+    }
+  };
+
+  // Store encrypted data on-chain
+  const storeEncryptedData = async () => {
+    if (!encryptedData || !contract) return;
+    setStoring(true);
+    try {
+      setEncryptionStatus("Storing on-chain...");
+      const tx = await contract.storeData(encryptedData);
+      await tx.wait();
+      setEncryptionStatus("Data stored successfully on-chain!");
+      setHasStoredData(true);
+    } catch (error) {
+      console.error("Storage error:", error);
+      setEncryptionStatus("Failed to store data on-chain");
+    }
+    setStoring(false);
+  };
+
+  // Delete stored data
+  const deleteStoredData = async () => {
+    if (!contract) return;
+    try {
+      setEncryptionStatus("Deleting stored data...");
+      const tx = await contract.deleteData();
+      await tx.wait();
+      setEncryptionStatus("Data deleted successfully!");
+      setHasStoredData(false);
+      setEncryptedData(null);
+    } catch (error) {
+      console.error("Deletion error:", error);
+      setEncryptionStatus("Failed to delete data");
     }
   };
 
@@ -141,33 +193,55 @@ export default function Home() {
         <div className="w-full bg-white dark:bg-neutral-dark rounded-xl border border-neutral-mid/10 p-6 flex flex-col items-center gap-3">
           <h2 className="text-lg font-semibold text-primary-dark mb-1">Upload Your SNP Data</h2>
           <p className="text-neutral-mid text-center text-sm mb-2">Upload your 23andMe or Ancestry ZIP file. Your data is encrypted and only you control access.</p>
-          <div {...getRootProps()} className={`w-full max-w-xs flex flex-col items-center justify-center border-2 border-dashed rounded-lg px-4 py-8 cursor-pointer transition bg-neutral hover:bg-neutral/70 focus:outline-none focus:ring-2 focus:ring-primary-light ${isDragActive ? 'border-primary bg-primary/10' : 'border-neutral-mid/30'}`} tabIndex={0} aria-label="File Upload Dropzone">
-            <input {...(getInputProps() as React.InputHTMLAttributes<HTMLInputElement>)} />
-            {uploadedFile ? (
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-primary-dark font-medium text-sm">{uploadedFile.name}</span>
-                <span className="text-xs text-neutral-mid">{(uploadedFile.size / 1024).toFixed(1)} KB</span>
-                <button
-                  className="mt-2 bg-accent text-white font-medium py-1.5 px-4 rounded-lg transition hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-accent-light focus:ring-offset-2"
-                  onClick={encryptFile}
-                  disabled={!encryptionKey || !!encryptedData}
-                >
-                  {encryptedData ? "Encrypted" : "Encrypt & Prepare for On-Chain"}
-                </button>
-                {encryptionStatus && (
-                  <span className="text-xs text-neutral-mid mt-1">{encryptionStatus}</span>
-                )}
-                {encryptedData && (
-                  <span className="text-xs font-mono text-primary-dark mt-1">Encrypted: {Array.from(encryptedData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}...</span>
-                )}
-              </div>
-            ) : (
-              <>
-                <span className="text-2xl mb-2" aria-hidden>📁</span>
-                <span className="text-sm text-neutral-mid text-center">Drag & drop your .zip file here, or click to select</span>
-              </>
-            )}
-          </div>
+          {hasStoredData ? (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-sm text-primary-dark">You already have data stored on-chain.</p>
+              <button
+                className="mt-2 bg-red-500 text-white font-medium py-1.5 px-4 rounded-lg transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2"
+                onClick={deleteStoredData}
+              >
+                Delete Stored Data
+              </button>
+            </div>
+          ) : (
+            <div {...getRootProps()} className={`w-full max-w-xs flex flex-col items-center justify-center border-2 border-dashed rounded-lg px-4 py-8 cursor-pointer transition bg-neutral hover:bg-neutral/70 focus:outline-none focus:ring-2 focus:ring-primary-light ${isDragActive ? 'border-primary bg-primary/10' : 'border-neutral-mid/30'}`} tabIndex={0} aria-label="File Upload Dropzone">
+              <input {...(getInputProps() as React.InputHTMLAttributes<HTMLInputElement>)} />
+              {uploadedFile ? (
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-primary-dark font-medium text-sm">{uploadedFile.name}</span>
+                  <span className="text-xs text-neutral-mid">{(uploadedFile.size / 1024).toFixed(1)} KB</span>
+                  {!encryptedData ? (
+                    <button
+                      className="mt-2 bg-accent text-white font-medium py-1.5 px-4 rounded-lg transition hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-accent-light focus:ring-offset-2"
+                      onClick={encryptFile}
+                      disabled={!encryptionKey}
+                    >
+                      Encrypt Data
+                    </button>
+                  ) : (
+                    <button
+                      className="mt-2 bg-primary text-white font-medium py-1.5 px-4 rounded-lg transition hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary-light focus:ring-offset-2"
+                      onClick={storeEncryptedData}
+                      disabled={storing}
+                    >
+                      {storing ? "Storing..." : "Store On-Chain"}
+                    </button>
+                  )}
+                  {encryptionStatus && (
+                    <span className="text-xs text-neutral-mid mt-1">{encryptionStatus}</span>
+                  )}
+                  {encryptedData && (
+                    <span className="text-xs font-mono text-primary-dark mt-1">Encrypted: {Array.from(encryptedData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}...</span>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <span className="text-2xl mb-2" aria-hidden>📁</span>
+                  <span className="text-sm text-neutral-mid text-center">Drag & drop your .zip file here, or click to select</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
         {/* Features Overview */}
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mt-6">
