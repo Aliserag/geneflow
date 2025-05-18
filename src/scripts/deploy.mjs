@@ -1,23 +1,23 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
+// We can use the Hardhat Runtime Environment explicitly here. This is optional
 // but useful for running the script in a standalone fashion through `node <script>`.
 //
 // You can also run a script with `npx hardhat run <script>`. If you do that, Hardhat
 // will compile your contracts, add the Hardhat Runtime Environment's members to the
 // global scope, and execute the script.
-const hre = require("hardhat");
+import { ethers } from "hardhat";
 
 async function main() {
   console.log("Starting deployment to Flow EVM...");
   
   try {
     console.log("Checking network configuration...");
-    const [deployer] = await hre.ethers.getSigners();
+    const [deployer] = await ethers.getSigners();
     console.log(`Deploying with account: ${deployer.address}`);
     
     console.log("Deploying GeneFlowEncryptedData contract...");
     
     // Deploy the contract
-    const GeneFlowEncryptedData = await hre.ethers.getContractFactory("GeneFlowEncryptedData");
+    const GeneFlowEncryptedData = await ethers.getContractFactory("GeneFlowEncryptedData");
     console.log("Contract factory created, deploying...");
     
     const geneFlowEncryptedData = await GeneFlowEncryptedData.deploy();
