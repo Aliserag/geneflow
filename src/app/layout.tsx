@@ -9,7 +9,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Geneflow: Discover You",
-  description: "GeneFlow is a Web3-powered genetic analysis platform leveraging LLMs, DeepSeek, and Flow blockchain for secure, personalized genetic insights.",
+  description: "GeneFlow is a Web3-powered genetic analysis platform on Flow blockchain for secure, private, and encrypted personalized genetic insights.",
 };
 
 export default function RootLayout({

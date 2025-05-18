@@ -5,6 +5,8 @@ import { useDropzone } from "react-dropzone";
 import { ethers } from "ethers";
 import contractInfo from "../contracts/GeneFlowEncryptedData.json";
 import { createSampleGeneticDataFile, stringToArrayBuffer, generateSample23andMeData } from "../utils/sampleGeneticData";
+import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 
 function toHexString(byteArray: Uint8Array) {
   return Array.from(byteArray, (byte) => {
@@ -22,6 +24,13 @@ declare global {
   interface Window {
     ethereum?: EthereumProvider;
   }
+}
+
+// Add interface for chat messages
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  isLoading?: boolean;
 }
 
 export default function Home() {
@@ -62,7 +71,7 @@ export default function Home() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   // Add these state variables to track report generation status
   const [reportsGenerating, setReportsGenerating] = useState<boolean>(false);
   const [generatedReportTypes, setGeneratedReportTypes] = useState<Set<string>>(new Set());
@@ -391,7 +400,7 @@ export default function Home() {
     }
     
     setIsGeneratingReport(true);
-    setEncryptionStatus(`Generating ${reportType} report with DeepSeek...`);
+    setEncryptionStatus(`Generating ${reportType} report...`);
     
     try {
       // Create a FormData object to send the genetic data
@@ -518,18 +527,40 @@ export default function Home() {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     
-    setIsSearching(true);
-    
-    // Add user message to chat history
+    // Add user message to chat history immediately
     setChatHistory(prev => [...prev, { role: 'user', content: searchQuery }]);
     
+    // Add a loading message
+    setChatHistory(prev => [...prev, { role: 'assistant', content: '...', isLoading: true }]);
+    
+    setIsSearching(true);
+    
     try {
+      // Check if this is a report request
+      const isReportRequest = searchQuery.toLowerCase().includes('report') || 
+                             searchQuery.toLowerCase().includes('analyze') || 
+                             searchQuery.toLowerCase().includes('analysis') ||
+                             searchQuery.toLowerCase().includes('tell me everything about');
+      
       let response;
       
       if (decryptedData) {
         // If decrypted data is available, send it with the query
         const formData = new FormData();
         formData.append('query', searchQuery);
+        
+        // Add response type and custom instructions for direct answers
+        if (!isReportRequest) {
+          formData.append('response_type', 'direct_answer');
+          formData.append('custom_instructions', `
+            - You are chatting directly with a regular, non-technical person about their genes
+            - Answer the question directly in 1-2 sentences maximum unless more detail is specifically requested
+            - Use extremely simple language as if explaining to someone with no scientific background
+            - Focus only on the specific question asked, don't provide additional context
+            - If asked about a specific gene or SNP, just say directly if they have it and what it means
+            - Never use scientific notation, markdown formatting, or section headers
+          `);
+        }
         
         // Append the genetic data if available
         const blob = new Blob([decryptedData], { type: 'application/octet-stream' });
@@ -541,7 +572,14 @@ export default function Home() {
         });
       } else {
         // Otherwise, just do a general search
-        response = await fetch(`/api/analyze-genetic-data?query=${encodeURIComponent(searchQuery)}`, {
+        const params = new URLSearchParams();
+        params.append('query', searchQuery);
+        
+        if (!isReportRequest) {
+          params.append('response_type', 'direct_answer');
+        }
+        
+        response = await fetch(`/api/analyze-genetic-data?${params.toString()}`, {
           method: 'GET'
         });
       }
@@ -552,11 +590,16 @@ export default function Home() {
       
       const data = await response.json();
       
+      // Remove the loading message
+      setChatHistory(prev => prev.filter(msg => !msg.isLoading));
+      
       if (data.success) {
-        // Add assistant response to chat history
+        let responseContent = data.analysis || data.answer || 'I processed your request, but couldn\'t generate a response.';
+        
+        // Add assistant response to chat history with raw markdown
         setChatHistory(prev => [...prev, { 
           role: 'assistant', 
-          content: data.analysis || data.answer || 'I processed your request, but couldn\'t generate a response.'
+          content: responseContent
         }]);
       } else {
         setChatHistory(prev => [...prev, { 
@@ -566,6 +609,10 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Search error:', error);
+      
+      // Remove the loading message
+      setChatHistory(prev => prev.filter(msg => !msg.isLoading));
+      
       setChatHistory(prev => [...prev, { 
         role: 'assistant', 
         content: `Sorry, there was an error processing your request: ${(error as Error).message}`
@@ -739,7 +786,7 @@ export default function Home() {
           {isGeneratingReport ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-              <p className="text-gray-600">Analyzing your genetic data with DeepSeek...</p>
+              <p className="text-gray-600">Analyzing your genetic data...</p>
               <p className="text-sm text-gray-500 mt-2">This may take a moment</p>
             </div>
           ) : (
@@ -987,71 +1034,131 @@ export default function Home() {
     );
   };
 
+  // Add a disconnectWallet function
+  const disconnectWallet = () => {
+    setWalletAddress(null);
+    setEncryptionKey(null);
+    setKeyHex(null);
+    setCurrentStep(1);
+    setShowDashboard(false);
+    setHasStoredData(false);
+    setEncryptionStatus(null);
+    setDecryptedData(null);
+    // Clear any genetic reports
+    setGeneticReports({
+      summary: null,
+      methylation: null,
+      carrier: null,
+      nutrition: null,
+      exercise: null,
+      medication: null,
+      ancestry: null,
+      diseaseRisk: null
+    });
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12 font-sans">
+      {/* Wallet Indicator */}
+      {walletAddress && (
+        <div className="fixed top-4 right-4 z-10">
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 px-4 py-2 flex items-center">
+            <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+            <span className="text-sm font-medium text-gray-700 mr-3">
+              {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+            </span>
+            <button 
+              onClick={disconnectWallet}
+              className="text-xs text-red-600 hover:text-red-800"
+            >
+              Disconnect
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Container */}
       <div className="w-full max-w-5xl">
         {/* Header */}
         <header className="mb-6 text-center">
           <h1 className="text-3xl font-bold text-gray-800 mb-2 tracking-tight">Geneflow</h1>
           <p className="text-lg text-gray-600 mx-auto max-w-xl">
-            Secure, private genetic data platform with end-to-end encryption
+            Secure, private, encrypted and anonymized. Discover you.
           </p>
         </header>
 
-        {/* Global Search Bar */}
-        <div className="mb-8">
-          <form onSubmit={handleSearch} className="flex flex-col">
-            <div className="flex mb-2">
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Ask anything about your genes or SNPs..." 
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-l-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300"
-              />
-              <button 
-                type="submit"
-                disabled={isSearching}
-                className="bg-blue-600 text-white px-6 py-3 rounded-r-lg hover:bg-blue-700 flex items-center justify-center"
-              >
-                {isSearching ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                  </svg>
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-gray-500">
-              {decryptedData 
-                ? "Your genetic data is loaded. Ask anything about yourself!" 
-                : "Connect your wallet and upload genetic data for personalized insights."}
-            </p>
-          </form>
-        </div>
+        {/* Global Search Bar - Only show when connected and has data */}
+        {walletAddress && decryptedData && (
+          <div className="mb-8">
+            <form onSubmit={handleSearch} className="flex flex-col">
+              <div className="flex mb-2">
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Ask anything about your genes or SNPs..." 
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-l-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300"
+                />
+                <button 
+                  type="submit"
+                  disabled={isSearching}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-r-lg hover:bg-blue-700 flex items-center justify-center"
+                >
+                  {isSearching ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Your genetic data is loaded. Ask anything about yourself!
+              </p>
+            </form>
+          </div>
+        )}
         
-        {/* Chat History */}
-        {chatHistory.length > 0 && (
+        {/* Chat History - Only show when connected and has data */}
+        {walletAddress && decryptedData && chatHistory.length > 0 && (
           <div className="mb-8 border border-gray-200 rounded-lg overflow-hidden">
             <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
               <h3 className="text-sm font-medium text-gray-700">Conversation History</h3>
             </div>
-            <div className="p-4 max-h-96 overflow-y-auto">
+            <div 
+              id="chat-messages" 
+              className="p-4 max-h-96 overflow-y-auto"
+              ref={(el) => {
+                // Auto-scroll to bottom when chat history updates
+                if (el) {
+                  el.scrollTop = el.scrollHeight;
+                }
+              }}
+            >
               {chatHistory.map((message, index) => (
                 <div 
                   key={index} 
                   className={`mb-4 ${message.role === 'user' ? 'text-right' : ''}`}
                 >
                   <div 
-                    className={`inline-block px-4 py-2 rounded-lg max-w-3/4 ${
-                      message.role === 'user' 
-                        ? 'bg-blue-100 text-blue-800 rounded-br-none' 
-                        : 'bg-gray-100 text-gray-800 rounded-bl-none'
-                    }`}
+                    className={`inline-block px-4 py-2 rounded-lg ${message.role === 'user' ? 'max-w-3/4 bg-blue-100 text-blue-800 rounded-br-none' : 'w-11/12 bg-gray-100 text-gray-800 rounded-bl-none'}`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.role === 'user' ? (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    ) : message.isLoading ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      </div>
+                    ) : (
+                      <div className="text-sm prose prose-sm max-w-none overflow-auto">
+                        <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

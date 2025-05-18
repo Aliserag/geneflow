@@ -15,9 +15,17 @@ export async function POST(request: NextRequest) {
     const reportType = formData.get('report_type') as string;
     const query = formData.get('query') as string;
     
+    // Get custom parameters if they exist
+    const customPrompt = formData.get('custom_prompt') as string;
+    const customInstructions = formData.get('custom_instructions') as string;
+    const responseType = formData.get('response_type') as string;
+    
     console.log(`Debug - API Key exists: ${!!DEEPSEEK_API_KEY}`);
     console.log(`Debug - Report Type: ${reportType}`);
     console.log(`Debug - Query: ${query}`);
+    console.log(`Debug - Custom Prompt: ${!!customPrompt}`);
+    console.log(`Debug - Custom Instructions: ${!!customInstructions}`);
+    console.log(`Debug - Response Type: ${responseType}`);
     
     // Get the genetic data file if it exists
     const geneticDataFile = formData.get('genetic_data') as File | null;
@@ -138,11 +146,43 @@ export async function POST(request: NextRequest) {
         const snpText = formatSNPsForPrompt(relevantSnps);
         
         // Generate the appropriate specialized prompt based on report type
-        const { prompt, userQuery } = generateSpecializedPrompt(reportType, allSnps, relevantSnps, snpText);
+        let { prompt, userQuery } = generateSpecializedPrompt(reportType, allSnps, relevantSnps, snpText);
+        
+        // Override with custom prompt if provided
+        if (customPrompt) {
+          console.log('Using custom prompt from request');
+          prompt = `You are a genetic analysis specialist interpreting SNP data.
+          
+          USER'S GENETIC PROFILE:
+          - Total SNPs in dataset: ${allSnps.length}
+          - Relevant SNPs identified: ${relevantSnps.length}
+          
+          KEY GENETIC MARKERS:
+          ${snpText}
+          
+          ${customPrompt}`;
+        }
+        
+        // Apply custom instructions if present and response type is direct_answer
+        if (responseType === 'direct_answer' || customInstructions) {
+          console.log('Applying direct answer format to prompt');
+          prompt = `${prompt}
+          
+          DIRECT ANSWER REQUIREMENTS:
+          - Provide a brief, conversational response (2-3 sentences when possible)
+          - Skip the formal report structure and markdown formatting
+          - Use plain language without technical jargon unless specifically needed
+          - Get straight to the point with the most relevant information
+          - Focus only on answering what was asked without additional details
+          ${customInstructions || ''}`;
+          
+          // Modify user query to request direct answer
+          userQuery = `Give me a direct, brief answer to this question: ${query || userQuery}`;
+        }
         
         // Replace the existing systemPrompt with prompt and userMessage with userQuery
         const systemPrompt = prompt;
-        const userMessage = userQuery || query || `Generate a comprehensive ${reportType} analysis based on my genetic data.`;
+        const userMessage = query || userQuery || `Generate a comprehensive ${reportType} analysis based on my genetic data.`;
         
         try {
           // Check if API key is available
@@ -307,12 +347,14 @@ export async function GET(request: NextRequest) {
     // Get the search query from URL
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('query');
+    const responseType = searchParams.get('response_type');
     
     if (!query) {
       throw new Error('No search query provided');
     }
     
     console.log(`Debug - Search query: ${query}`);
+    console.log(`Debug - Response type: ${responseType}`);
     
     // Check if API key is available
     if (!DEEPSEEK_API_KEY) {
@@ -325,6 +367,19 @@ export async function GET(request: NextRequest) {
     }
     
     try {
+      // Create system prompt based on response type
+      let systemPrompt = 'You are a genetic information assistant. Provide concise, accurate information about genetic concepts, SNPs, and genetic health topics.';
+      let userPrompt = query;
+      
+      // Modify prompts for direct answers
+      if (responseType === 'direct_answer') {
+        systemPrompt = `You are a genetic information assistant. Provide direct, brief answers using plain language. 
+        Focus only on answering the question without additional context or explanations unless necessary.
+        Avoid using technical jargon and formal report structures.`;
+        
+        userPrompt = `Give me a direct, brief answer to this question: ${query}`;
+      }
+      
       // Call DeepSeek API for genetic information
       const response = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
@@ -337,11 +392,11 @@ export async function GET(request: NextRequest) {
           messages: [
             {
               role: 'system',
-              content: 'You are a genetic information assistant. Provide concise, accurate information about genetic concepts, SNPs, and genetic health topics.'
+              content: systemPrompt
             },
             {
               role: 'user',
-              content: query
+              content: userPrompt
             }
           ],
           temperature: 0.5,
