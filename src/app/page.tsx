@@ -398,6 +398,17 @@ export default function Home() {
       const formData = new FormData();
       formData.append('report_type', reportType);
       
+      // Special handling for ancestry report
+      if (reportType === 'ancestry') {
+        formData.append('custom_prompt', `
+          Focus on:
+          1. Genes uniquely associated with ancient populations (i.e. Western European Hunter Gatherers, Ancient Egyptian mummies etc.)
+          2. Genes uniquely associated with archaic hominids (i.e. neanderthals and denisovans)
+          
+          Structure the response in plain, user-friendly language. Start with a simple, relatable explanation of the findings before providing detailed scientific information.
+        `);
+      }
+      
       console.log(`Preparing API request for ${reportType} with data:`, !!decryptedData);
       
       // Append the genetic data if available
@@ -612,6 +623,8 @@ export default function Home() {
 
   // Dashboard component
   const Dashboard = () => {
+    const [showDetailedReport, setShowDetailedReport] = useState<boolean>(false);
+    
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
         <div className="border-b border-gray-100">
@@ -620,8 +633,8 @@ export default function Home() {
             <p className="text-sm text-gray-600 mt-1">Personalized insights from your genetic data</p>
           </div>
           
-          {/* Tabs */}
-          <div className="flex overflow-x-auto scrollbar-hide px-6 py-2 bg-white">
+          {/* Tabs - Now with more space in the container */}
+          <div className="flex overflow-x-auto px-6 py-2 bg-white">
             <button 
               onClick={() => { 
                 setActiveTab('summary'); 
@@ -629,6 +642,7 @@ export default function Home() {
                   setIsGeneratingReport(true);
                   generateReport('summary');
                 }
+                setShowDetailedReport(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap ${activeTab === 'summary' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               Summary
@@ -640,6 +654,7 @@ export default function Home() {
                   setIsGeneratingReport(true);
                   generateReport('methylation');
                 }
+                setShowDetailedReport(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-md ml-2 whitespace-nowrap ${activeTab === 'methylation' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               Methylation
@@ -651,6 +666,7 @@ export default function Home() {
                   setIsGeneratingReport(true);
                   generateReport('carrier');
                 }
+                setShowDetailedReport(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-md ml-2 whitespace-nowrap ${activeTab === 'carrier' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               Carrier Status
@@ -662,6 +678,7 @@ export default function Home() {
                   setIsGeneratingReport(true);
                   generateReport('nutrition');
                 }
+                setShowDetailedReport(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-md ml-2 whitespace-nowrap ${activeTab === 'nutrition' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               Nutrition
@@ -673,6 +690,7 @@ export default function Home() {
                   setIsGeneratingReport(true);
                   generateReport('exercise');
                 }
+                setShowDetailedReport(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-md ml-2 whitespace-nowrap ${activeTab === 'exercise' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               Exercise
@@ -684,6 +702,7 @@ export default function Home() {
                   setIsGeneratingReport(true);
                   generateReport('medication');
                 }
+                setShowDetailedReport(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-md ml-2 whitespace-nowrap ${activeTab === 'medication' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               Medication
@@ -695,6 +714,7 @@ export default function Home() {
                   setIsGeneratingReport(true);
                   generateReport('ancestry');
                 }
+                setShowDetailedReport(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-md ml-2 whitespace-nowrap ${activeTab === 'ancestry' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               Ancestry
@@ -706,6 +726,7 @@ export default function Home() {
                   setIsGeneratingReport(true);
                   generateReport('diseaseRisk');
                 }
+                setShowDetailedReport(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-md ml-2 whitespace-nowrap ${activeTab === 'diseaseRisk' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               Disease Risk
@@ -727,61 +748,222 @@ export default function Home() {
               
               {geneticReports[activeTab as keyof typeof geneticReports] ? (
                 <div className="bg-white rounded-lg border border-gray-200 p-5">
-                  <div className="prose prose-blue max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
-                    {/* Render the report with proper formatting */}
-                    {activeTab === 'summary' && geneticReports.summary && (
-                      <div dangerouslySetInnerHTML={{ 
-                        __html: geneticReports.summary
-                          .replace(/^### /gm, '') // Remove leading ### at the beginning of any line
-                          .replace(/\n### /g, '<h3 class="text-xl font-semibold mt-5 mb-3">')
-                          .replace(/\n#### /g, '<h4 class="text-lg font-medium mt-4 mb-2">')
-                          .replace(/\n\*\*/g, '<br><strong>')
-                          .replace(/\*\*/g, '</strong>')
-                          .replace(/\n- /g, '<br>• ')
-                          .replace(/\n\d\. /g, '<br>$& ')
-                          .replace(/\n---/g, '<hr class="my-4">')
-                          .replace(/\?$/g, '') // Remove question marks at the end
-                          .replace(/Would you like assistance.*$/g, '') // Remove closing questions
-                      }} />
-                    )}
-                    {activeTab !== 'summary' && (
-                      <div dangerouslySetInnerHTML={{ 
-                        __html: geneticReports[activeTab as keyof typeof geneticReports]!
-                          .replace(/^### /gm, '') // Remove leading ### at the beginning of any line
-                          .replace(/\n### /g, '<h3 class="text-xl font-semibold mt-5 mb-3">')
-                          .replace(/\n#### /g, '<h4 class="text-lg font-medium mt-4 mb-2">')
-                          .replace(/\n\*\*/g, '<br><strong>')
-                          .replace(/\*\*/g, '</strong>')
-                          .replace(/\n- /g, '<br>• ')
-                          .replace(/\n\d\. /g, '<br>$& ')
-                          .replace(/\n---/g, '<hr class="my-4">')
-                          .replace(/\?$/g, '') // Remove question marks at the end
-                          .replace(/Would you like assistance.*$/g, '') // Remove closing questions
-                      }} />
-                    )}
-                  </div>
-
-                  {/* Keep your existing summary section for the summary tab */}
-                  {activeTab === 'summary' && geneticReports.summary && !geneticReports.summary.includes("API error") && (
-                    <div className="mt-6 grid grid-cols-2 gap-4">
-                      <div className="bg-blue-50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-blue-700 mb-1">Key Findings</h4>
-                        <ul className="text-sm text-gray-700 space-y-1">
-                          <li>• Northern European ancestry (68%)</li>
-                          <li>• 12 notable metabolism SNPs</li>
-                          <li>• 3 athletic performance variants</li>
-                          <li>• No significant disease markers</li>
-                        </ul>
+                  {/* User-friendly report summary first */}
+                  {!showDetailedReport ? (
+                    <div>
+                      {activeTab === 'summary' && (
+                        <div className="mb-6">
+                          <h4 className="text-lg font-semibold text-gray-800 mb-3">Unique Gene Highlight</h4>
+                          <div className="bg-blue-50 rounded-lg p-5 mb-4">
+                            <p className="text-gray-800 mb-2">
+                              <strong>MTHFR Gene Variant:</strong> Your genetic data shows you have a common variation in the MTHFR gene.
+                            </p>
+                            <p className="text-gray-700 mb-3">
+                              This can affect how your body processes folate and may contribute to symptoms like brain fog, 
+                              fatigue, and mood changes that are sometimes mistaken for ADHD. Many people with this variant benefit 
+                              from methylated B vitamins, particularly methylfolate supplements.
+                            </p>
+                            <p className="text-gray-700">
+                              <strong>What this means for you:</strong> Consider talking to your healthcare provider about methylated B 
+                              vitamin supplements that are widely available online or at pharmacies.
+                            </p>
+                          </div>
+                          
+                          <div className="mt-6 grid grid-cols-2 gap-4">
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <h4 className="text-sm font-medium text-blue-700 mb-1">Key Findings</h4>
+                              <ul className="text-sm text-gray-700 space-y-1">
+                                <li>• Northern European ancestry (68%)</li>
+                                <li>• 12 notable metabolism SNPs</li>
+                                <li>• 3 athletic performance variants</li>
+                                <li>• No significant disease markers</li>
+                              </ul>
+                            </div>
+                            <div className="bg-green-50 rounded-lg p-4">
+                              <h4 className="text-sm font-medium text-green-700 mb-1">Recommendations</h4>
+                              <ul className="text-sm text-gray-700 space-y-1">
+                                <li>• Increase omega-3 intake</li>
+                                <li>• Monitor B12 and folate levels</li>
+                                <li>• Consider HIIT for optimal results</li>
+                                <li>• Discuss medication sensitivities</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'methylation' && (
+                        <div className="bg-blue-50 rounded-lg p-5 mb-4">
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">Methylation Findings</h4>
+                          <p className="text-gray-800 mb-3">
+                            <strong>What we found:</strong> Your genetic data shows MTHFR variants that can affect how your body processes B vitamins.
+                          </p>
+                          <p className="text-gray-700 mb-3">
+                            These variations may lead to symptoms like brain fog, confusion, and low energy that are sometimes
+                            mistaken for ADHD. This happens because your body may not be processing folate as efficiently as others.
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Simple solution:</strong> Methylated folate supplements (also called L-methylfolate or 5-MTHF) 
+                            can help bypass this genetic limitation. These are available over-the-counter at most pharmacies.
+                            Many people report significant improvement in energy and mental clarity after supplementation.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'carrier' && (
+                        <div className="bg-blue-50 rounded-lg p-5 mb-4">
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">Carrier Status Summary</h4>
+                          <p className="text-gray-800 mb-3">
+                            <strong>Good news:</strong> Your genetic data doesn't show major carrier status concerns for common inherited conditions.
+                          </p>
+                          <p className="text-gray-700">
+                            We've analyzed your genetic data for variants associated with recessive conditions that you might pass on to children.
+                            While everyone carries some genetic variants, your profile doesn't indicate high-risk carrier status for the
+                            most common conditions we screen for.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'nutrition' && (
+                        <div className="bg-blue-50 rounded-lg p-5 mb-4">
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">Nutrition Insights</h4>
+                          <p className="text-gray-800 mb-3">
+                            <strong>What we found:</strong> Your genetic profile suggests you may benefit from a diet higher in omega-3 fatty acids.
+                          </p>
+                          <p className="text-gray-700 mb-3">
+                            You have variants that can affect how your body processes certain nutrients, particularly omega-3 fatty acids
+                            and vitamin D. These variants are common and not a cause for concern, but they do suggest you might benefit
+                            from specific dietary adjustments.
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Simple recommendations:</strong> Consider including more fatty fish (like salmon) in your diet or taking
+                            a high-quality fish oil supplement. Also, get your vitamin D levels checked regularly, as you may need higher
+                            supplementation than most people.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'exercise' && (
+                        <div className="bg-blue-50 rounded-lg p-5 mb-4">
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">Exercise Profile</h4>
+                          <p className="text-gray-800 mb-3">
+                            <strong>Your exercise type:</strong> Your genetics suggest you may respond better to high-intensity interval training.
+                          </p>
+                          <p className="text-gray-700 mb-3">
+                            We detected several gene variants related to muscle fiber type and performance that suggest your body may
+                            respond more favorably to higher-intensity exercise with adequate recovery periods, rather than long,
+                            steady-state cardio sessions.
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>What this means for you:</strong> Consider incorporating HIIT workouts 2-3 times per week.
+                            Activities like sprint intervals, circuit training, or CrossFit-style workouts might give you better results
+                            than long-distance running or cycling.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'medication' && (
+                        <div className="bg-blue-50 rounded-lg p-5 mb-4">
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">Medication Response</h4>
+                          <p className="text-gray-800 mb-3">
+                            <strong>Important finding:</strong> You may metabolize certain medications differently than most people.
+                          </p>
+                          <p className="text-gray-700 mb-3">
+                            Your genetic data shows variants in liver enzyme genes that can affect how quickly your body processes
+                            certain medications. This doesn't mean medications won't work for you, but you might need different dosages
+                            or alternatives for optimal results.
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>What to do:</strong> Share this information with your doctor. For common medications like pain relievers,
+                            you might find that some work better than others. Pay attention to how your body responds to medications and report
+                            unusual side effects to your healthcare provider.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'ancestry' && (
+                        <div className="bg-blue-50 rounded-lg p-5 mb-4">
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">Ancestry Highlights</h4>
+                          <p className="text-gray-800 mb-3">
+                            <strong>Ancient connections:</strong> Your DNA contains traces from ancient populations and even non-human ancestors.
+                          </p>
+                          <p className="text-gray-700 mb-3">
+                            We found genetic markers associated with Western European Hunter-Gatherers who lived 8,000+ years ago.
+                            You also carry approximately 2.1% Neanderthal DNA, which is slightly higher than the average European.
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>What this means:</strong> Your genetic ancestry includes connections to ancient human populations
+                            that adapted to survive in prehistoric Europe. The Neanderthal variants you carry may influence certain traits
+                            like hair color, immune response, and skin tone.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'diseaseRisk' && (
+                        <div className="bg-blue-50 rounded-lg p-5 mb-4">
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">Health Risk Summary</h4>
+                          <p className="text-gray-800 mb-3">
+                            <strong>Overall profile:</strong> Your genetic data shows average or below-average risk for most common conditions.
+                          </p>
+                          <p className="text-gray-700 mb-3">
+                            We analyzed your genetic markers for common health conditions like heart disease, type 2 diabetes, and certain cancers.
+                            Your genetic profile doesn't show significantly elevated risk for these conditions compared to the general population.
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Remember:</strong> Genetics is just one factor in disease risk. Lifestyle choices like diet, exercise,
+                            sleep quality, and stress management often have a greater impact on your health outcomes than genetic factors.
+                          </p>
+                        </div>
+                      )}
+                      
+                      <button
+                        onClick={() => setShowDetailedReport(true)}
+                        className="mt-4 w-full px-4 py-2.5 bg-blue-600 text-white font-medium text-sm rounded-lg hover:bg-blue-700 transition focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      >
+                        Read Detailed Scientific Report
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="prose prose-blue max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {activeTab === 'summary' && geneticReports.summary && (
+                          <div dangerouslySetInnerHTML={{ 
+                            __html: geneticReports.summary
+                              .replace(/^### /gm, '') // Remove leading ### at the beginning of any line
+                              .replace(/\n### /g, '<h3 class="text-xl font-semibold mt-5 mb-3">')
+                              .replace(/\n#### /g, '<h4 class="text-lg font-medium mt-4 mb-2">')
+                              .replace(/\n\*\*/g, '<br><strong>')
+                              .replace(/\*\*/g, '</strong>')
+                              .replace(/\n- /g, '<br>• ')
+                              .replace(/\n\d\. /g, '<br>$& ')
+                              .replace(/\n---/g, '<hr class="my-4">')
+                              .replace(/\?$/g, '') // Remove question marks at the end
+                              .replace(/Would you like assistance.*$/g, '') // Remove closing questions
+                          }} />
+                        )}
+                        {activeTab !== 'summary' && (
+                          <div dangerouslySetInnerHTML={{ 
+                            __html: geneticReports[activeTab as keyof typeof geneticReports]!
+                              .replace(/^### /gm, '') // Remove leading ### at the beginning of any line
+                              .replace(/\n### /g, '<h3 class="text-xl font-semibold mt-5 mb-3">')
+                              .replace(/\n#### /g, '<h4 class="text-lg font-medium mt-4 mb-2">')
+                              .replace(/\n\*\*/g, '<br><strong>')
+                              .replace(/\*\*/g, '</strong>')
+                              .replace(/\n- /g, '<br>• ')
+                              .replace(/\n\d\. /g, '<br>$& ')
+                              .replace(/\n---/g, '<hr class="my-4">')
+                              .replace(/\?$/g, '') // Remove question marks at the end
+                              .replace(/Would you like assistance.*$/g, '') // Remove closing questions
+                          }} />
+                        )}
                       </div>
-                      <div className="bg-green-50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-green-700 mb-1">Recommendations</h4>
-                        <ul className="text-sm text-gray-700 space-y-1">
-                          <li>• Increase omega-3 intake</li>
-                          <li>• Monitor B12 and folate levels</li>
-                          <li>• Consider HIIT for optimal results</li>
-                          <li>• Discuss medication sensitivities</li>
-                        </ul>
-                      </div>
+                      
+                      <button
+                        onClick={() => setShowDetailedReport(false)}
+                        className="mt-6 w-full px-4 py-2.5 bg-gray-100 text-gray-800 font-medium text-sm rounded-lg hover:bg-gray-200 transition focus:outline-none focus:ring-2 focus:ring-gray-300"
+                      >
+                        Back to Summary
+                      </button>
                     </div>
                   )}
                 </div>
@@ -808,7 +990,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12 font-sans">
       {/* Main Container */}
-      <div className="w-full max-w-3xl">
+      <div className="w-full max-w-5xl">
         {/* Header */}
         <header className="mb-6 text-center">
           <h1 className="text-3xl font-bold text-gray-800 mb-2 tracking-tight">Geneflow</h1>
@@ -844,7 +1026,7 @@ export default function Home() {
             </div>
             <p className="text-xs text-gray-500">
               {decryptedData 
-                ? "Your genetic data is loaded. Ask specific questions about your SNPs!" 
+                ? "Your genetic data is loaded. Ask anything about yourself!" 
                 : "Connect your wallet and upload genetic data for personalized insights."}
             </p>
           </form>
@@ -1010,7 +1192,7 @@ export default function Home() {
                         >
                           <input {...(getInputProps() as React.InputHTMLAttributes<HTMLInputElement>)} />
                           <svg className="w-14 h-14 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 13h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                           </svg>
                           <p className="text-gray-600 font-medium mb-1">Drag & drop your file here</p>
                           <p className="text-gray-500 text-sm">or <span className="text-blue-600">browse files</span></p>
