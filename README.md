@@ -1,9 +1,18 @@
 # GeneFlow: Own Your Genetic Data
 
-[![GeneFlow Demo](https://img.youtube.com/vi/UCNFwJwMuYw/0.jpg)](https://www.youtube.com/watch?v=UCNFwJwMuYw)
+<div align="center">
+  <p><strong>Click Image Below to Watch Project Video</strong></p>
+</div>
+
 
 <div align="center">
-  <img src="public/geneflow-logo.png" alt="GeneFlow Logo" width="200"/>
+  <a href="https://www.youtube.com/watch?v=UCNFwJwMuYw">
+    <img src="https://img.youtube.com/vi/UCNFwJwMuYw/0.jpg" alt="GeneFlow Demo" />
+  </a>
+</div>
+
+
+<div align="center">
   <p><strong>Secure. Private. Encrypted. Anonymized. Discover you.</strong></p>
 </div>
 
