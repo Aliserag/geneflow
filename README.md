@@ -16,6 +16,9 @@
   <p><strong>Secure. Private. Encrypted. Anonymized. Discover you.</strong></p>
 </div>
 
+
+[Live Demo](geneflow.vercel.app)
+
 ## 🧬 GeneFlow - Discover the Universe Within You
 
 GeneFlow is a Web3-powered genetic analysis platform that gives you complete ownership and control over your genetic data. Using client-side encryption with keys derived from your MetaMask wallet, GeneFlow ensures that only you can decrypt and access your genetic information.
