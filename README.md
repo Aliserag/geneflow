@@ -1,36 +1,110 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GeneFlow: Own Your Genetic Data
 
-## Getting Started
+[![GeneFlow Demo](https://img.youtube.com/vi/UCNFwJwMuYw/0.jpg)](https://www.youtube.com/watch?v=UCNFwJwMuYw)
 
-First, run the development server:
+<div align="center">
+  <img src="public/geneflow-logo.png" alt="GeneFlow Logo" width="200"/>
+  <p><strong>Secure. Private. Encrypted. Anonymized. Discover you.</strong></p>
+</div>
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🧬 GeneFlow - Discover the Universe Within You
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+GeneFlow is a Web3-powered genetic analysis platform that gives you complete ownership and control over your genetic data. Using client-side encryption with keys derived from your MetaMask wallet, GeneFlow ensures that only you can decrypt and access your genetic information.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+In a world where genetic testing companies regularly sell user data, suffer security breaches, and file for bankruptcy—putting millions of genetic profiles at risk—GeneFlow offers a revolutionary alternative.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🛡️ Why Web3?
 
-## Learn More
+- **True Data Ownership**: Your genetic data belongs to you alone, not corporations
+- **End-to-End Encryption**: Data is encrypted client-side using your wallet as the key
+- **Blockchain Security**: Encrypted data stored on Flow blockchain for immutability 
+- **No Central Database**: Your data never sits in a corporate server vulnerable to hacks
+- **Personalized Insights**: Receive detailed reports on health, ancestry, nutrition, and more
+- **Interactive Chat**: Ask questions about your genes and receive instant, personalized answers
 
-To learn more about Next.js, take a look at the following resources:
+## ✨ Features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Multiple Report Categories**:
+  - Comprehensive Summary
+  - Methylation Analysis
+  - Carrier Status
+  - Nutrition Insights
+  - Exercise Recommendations
+  - Medication Response
+  - Ancestry Composition
+  - Disease Risk Assessment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+  These would normally cost you ~$5,000+. WIth GeneFlow, you access them and so much more, for FREE.
 
-## Deploy on Vercel
+- **Interactive Chat Interface**: Ask specific questions about your genetic data
+- **Secure Encryption**: MetaMask-based key derivation f
+- **Easy Data Management**: Upload, encrypt, store, and access your data
+- **User-Friendly Design**: Clean, intuitive interface with step-by-step guidance
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Post Hackathon todos:
+ - Integrate account linking for couples interested in prenatal gene testing as well as for giving temporarily/secure access to healthcare providers.
+ - Implement sustainable 'lossless' business model such as a protocol token staking contract that allows users access to the app after staking x tokens, with rewards going to the protocol. Users can unstake at any time.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [MetaMask](https://metamask.io/download/) browser extension
+- [Node.js](https://nodejs.org/) (v18 or higher)
+- A 23andMe or Ancestry.com genetic data file (or use our test file)
+
+### Installation
+
+1. Clone the repository:
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+### Testing Without Your Own Genetic Data
+
+For testing purposes, you can use the sample genetic data file included in this repository:
+
+1. Download `geneflow_data_testing_23andMe_format.zip` from the repository
+2. Follow the app's step-by-step process to connect your wallet
+3. Upload the test file when prompted
+4. Explore the reports and chat functionality
+
+This test file contains a subset of real 23andMe data format (anonymized) so you can experience the full functionality of the platform.
+
+## Why I built Geneflow
+
+Throughout their history, companies like 23andMe have regularly sold users' data, and in early 2023, 7 million users had their data breached when hackers exploited leaked passwords. The data was just sitting there, unprotected and out of users' control.
+
+The creator of GeneFlow was one of these victims. After downloading their genetic data and deactivating their 23andMe account, they integrated their genetic data with an AI chatbot for personal insights. This exploration revealed a genetic variant (MTHFR) affecting folate metabolism, explaining years of persistent low energy and brain fog—symptoms that doctors had consistently overlooked.
+
+After taking methylated folate supplements based on this discovery, they experienced a dramatic improvement in energy, focus, and overall well-being. This life-changing revelation demonstrated the immense value hidden within our genetic data—and the importance of having private, secure access to it.
+
+GeneFlow was built to make these insights accessible to everyone while ensuring their genetic data remains firmly in their control.
+
+## 💡 Technical Details
+
+- **Front-end**: Next.js, React, TypeScript, TailwindCSS
+- **Contract**: Solidity, hardhat
+- **Encryption**: AES-GCM with MetaMask-derived keys
+- **Data Analysis**: LLM for personalized genetic interpretation
+- **File Handling**: Support for 23andMe and Ancestry.com file formats (also made it more robust to accept txt files as well as zip)
+
+## 🔗 Impact
+
+The genetic testing market exceeds $21 billion and is relevant to everyone, but is dominated by companies that take your data without your control. GeneFlow is different:
+
+**Your data. Your insights. Your rules.**
+
+---
+
+Within your genes lies a universe. Only you should own it. GeneFlow makes that possible.
