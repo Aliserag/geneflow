@@ -29,7 +29,7 @@ In a world where genetic testing companies regularly sell user data, suffer secu
 
 - **True Data Ownership**: Your genetic data belongs to you alone, not corporations
 - **End-to-End Encryption**: Data is encrypted client-side using your wallet as the key
-- **Blockchain Security**: Encrypted data stored on Flow blockchain for immutability 
+- **Blockchain Security**: Encrypted data stored on the blockchain for immutability 
 - **No Central Database**: Your data never sits in a corporate server vulnerable to hacks
 - **Personalized Insights**: Receive detailed reports on health, ancestry, nutrition, and more
 - **Interactive Chat**: Ask questions about your genes and receive instant, personalized answers
