@@ -2,17 +2,18 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/aliserag/Documents/GitHub/geneflow/contracts/contracts/GeneFlowEncryptedData.sol": {
-      "lastModificationDate": 1747500175355,
-      "contentHash": "92a26f8d72508fe2294b9e631bae266d",
-      "sourceName": "contracts/GeneFlowEncryptedData.sol",
+      "lastModificationDate": 1748299079704,
+      "contentHash": "c5fb8af084b75c1004da4b00e1e13054",
+      "sourceName": "contracts/contracts/GeneFlowEncryptedData.sol",
       "solcConfig": {
-        "version": "0.8.28",
+        "version": "0.8.26",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
+          "viaIR": false,
           "outputSelection": {
             "*": {
               "*": [
@@ -31,24 +32,25 @@
       },
       "imports": [],
       "versionPragmas": [
-        "^0.8.0"
+        "^0.8.26"
       ],
       "artifacts": [
         "GeneFlowEncryptedData"
       ]
     },
     "/Users/aliserag/Documents/GitHub/geneflow/contracts/contracts/Lock.sol": {
-      "lastModificationDate": 1747499376039,
-      "contentHash": "7eee587c347fe6b1de50c96688cb9477",
-      "sourceName": "contracts/Lock.sol",
+      "lastModificationDate": 1748299535748,
+      "contentHash": "7b425b1a01db49f76c454d402c57aea3",
+      "sourceName": "contracts/contracts/Lock.sol",
       "solcConfig": {
-        "version": "0.8.28",
+        "version": "0.8.26",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
+          "viaIR": false,
           "outputSelection": {
             "*": {
               "*": [
@@ -67,7 +69,7 @@
       },
       "imports": [],
       "versionPragmas": [
-        "^0.8.28"
+        "^0.8.26"
       ],
       "artifacts": [
         "Lock"

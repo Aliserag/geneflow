@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+
+// Sources flattened with hardhat v2.24.0 https://hardhat.org
+
+
+// File contracts/contracts/GeneFlowEncryptedData.sol
+
+// Original license: SPDX_License_Identifier: MIT
+
 /// @title GeneFlowEncryptedData
 /// @notice Stores encrypted genetic data securely on-chain
 /// @dev Only the owner of the data can decrypt it client-side with their wallet
@@ -50,4 +58,4 @@ contract GeneFlowEncryptedData {
     function getDataSize(address user) external view returns (uint256) {
         return encryptedData[user].length;
     }
-} 
+}

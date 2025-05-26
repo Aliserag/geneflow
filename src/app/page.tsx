@@ -7,11 +7,16 @@ import contractInfo from "../contracts/GeneFlowEncryptedData.json";
 import { createSampleGeneticDataFile, stringToArrayBuffer, generateSample23andMeData } from "../utils/sampleGeneticData";
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
+import Papa from 'papaparse';
+import { generateAnalysis } from '../services/analysis-service';
+import { TabItem, TabContent } from '../components/TabSystem';
+import { switchToNeroNetwork, addNeroNetwork, isConnectedToNero } from '../utils/network-helpers';
+import contractConfig from '../contract-config';
 
 function toHexString(byteArray: Uint8Array) {
-  return Array.from(byteArray, (byte) => {
-    return ("0" + (byte & 0xff).toString(16)).slice(-2);
-  }).join("");
+  return Array.from(byteArray)
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 // Type for window.ethereum
@@ -75,25 +80,46 @@ export default function Home() {
   // Add these state variables to track report generation status
   const [reportsGenerating, setReportsGenerating] = useState<boolean>(false);
   const [generatedReportTypes, setGeneratedReportTypes] = useState<Set<string>>(new Set());
+  const [networkError, setNetworkError] = useState<string | null>(null);
 
   // MetaMask connect and key derivation
   const connectWalletAndDeriveKey = async () => {
     setConnecting(true);
+    setNetworkError(null);
+    
     try {
       if (!window.ethereum) {
         alert("MetaMask is not installed");
         setConnecting(false);
         return;
       }
+      
+      // Check if we're on NERO network, if not try to switch
       const provider = new ethers.BrowserProvider(window.ethereum as unknown as ethers.Eip1193Provider);
+      const network = await provider.getNetwork();
+      
+      // NERO Testnet Chain ID is 689
+      if (network.chainId !== BigInt(contractConfig.nero.chainId)) {
+        setEncryptionStatus("Switching to NERO testnet network...");
+        const switched = await switchToNeroNetwork();
+        if (!switched) {
+          setNetworkError("Failed to switch to NERO network. Please add it manually in MetaMask.");
+          setConnecting(false);
+          return;
+        }
+      }
+      
+      // Request accounts
       const accounts = await provider.send("eth_requestAccounts", []);
       const address = accounts[0];
       setWalletAddress(address);
       const signer = await provider.getSigner();
       
-      // Initialize contract
+      // Initialize contract with NERO contract address
+      const neroContractAddress = contractConfig.nero.contractAddress;
+      
       const geneFlowContract = new ethers.Contract(
-        contractInfo.address,
+        neroContractAddress,
         contractInfo.abi,
         signer
       );
@@ -131,7 +157,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Connection error:", error);
-      alert("MetaMask connection failed");
+      setNetworkError("MetaMask connection failed. Please try again.");
       setWalletAddress(null);
       setEncryptionKey(null);
       setKeyHex(null);
@@ -207,13 +233,18 @@ export default function Home() {
         return;
       }
 
-      // Check if on Flow testnet (chain ID 545)
+      // Check if on NERO testnet (chain ID 689)
       const chainId = await window.ethereum.request({ method: 'eth_chainId' });
       console.log("Current chain ID:", chainId);
-      if (chainId !== '0x221') { // 0x221 is hex for 545
-        setEncryptionStatus("Please switch to Flow testnet (Chain ID: 545) in MetaMask");
-        setStoring(false);
-        return;
+      if (chainId !== '0x2B1') { // 0x2B1 is hex for 689
+        setEncryptionStatus("Please switch to NERO testnet (Chain ID: 689) in MetaMask");
+        
+        // Try to switch to NERO network
+        const switched = await switchToNeroNetwork();
+        if (!switched) {
+          setStoring(false);
+          return;
+        }
       }
       
       console.log("Requesting transaction from MetaMask...");
@@ -223,6 +254,14 @@ export default function Home() {
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as string[];
       const from = accounts[0];
       
+      // Get NERO contract address
+      const neroContractAddress = contractConfig.nero.contractAddress;
+      if (!neroContractAddress) {
+        setEncryptionStatus("Contract address not configured for NERO network");
+        setStoring(false);
+        return;
+      }
+      
       // Encode the function call using ethers
       const ABI = ["function storeData(bytes data)"];
       const contractInterface = new ethers.Interface(ABI);
@@ -231,7 +270,7 @@ export default function Home() {
       // Prepare transaction parameters
       const txParams = {
         from: from,
-        to: contractInfo.address,
+        to: neroContractAddress,
         data: data,
         gas: "0x" + (3000000).toString(16), // Convert gas limit to hex directly
       };
@@ -248,7 +287,7 @@ export default function Home() {
       setEncryptionStatus(`Transaction submitted! Hash: ${txHash.slice(0, 10)}... Waiting for confirmation...`);
       
       // Wait for transaction receipt
-      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_RPC_URL || "https://testnet.evm.nodes.onflow.org");
+      const provider = new ethers.JsonRpcProvider("https://rpc-testnet.nerochain.io");
       const receipt = await provider.waitForTransaction(txHash);
       
       console.log("Transaction confirmed:", receipt);
@@ -268,22 +307,27 @@ export default function Home() {
           setIsGeneratingReport(true);
           generateReport('summary');
         } catch (error) {
-          console.error("Error processing file for dashboard:", error);
+          console.error("Error preparing dashboard:", error);
         }
       }
-      
     } catch (error: any) {
       console.error("Storage error:", error);
-      if (error?.code === 4001) {
-        // MetaMask error code for user rejected transaction
-        setEncryptionStatus("Transaction rejected. You declined the MetaMask request.");
-      } else if (error?.code === -32002) {
-        // MetaMask error code for request already pending
-        setEncryptionStatus("A MetaMask request is already pending. Please check your MetaMask extension.");
-      } else if (error?.message?.includes("user rejected")) {
-        setEncryptionStatus("Transaction rejected. You declined the MetaMask request.");
+      
+      if (error.code) {
+        switch (error.code) {
+          case 4001:
+            // MetaMask error code for user rejected transaction
+            setEncryptionStatus("Transaction rejected. You declined the MetaMask request.");
+            break;
+          case -32002:
+            // MetaMask error code for request already pending
+            setEncryptionStatus("A MetaMask request is already pending. Please check your MetaMask extension.");
+            break;
+          default:
+            setEncryptionStatus("Transaction rejected. You declined the MetaMask request.");
+        }
       } else {
-        setEncryptionStatus(`Failed to store data: ${(error as Error).message || "Unknown error"}`);
+        setEncryptionStatus(`Error storing data: ${error.message || "Unknown error"}`);
       }
     }
     setStoring(false);

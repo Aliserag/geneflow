@@ -1,0 +1,33 @@
+
+NERO TESTNET CONTRACT VERIFICATION GUIDE
+
+Contract Address: 0x344eb6338E62d207077E53C525bAA6B2A5Bb17ba
+Contract Name: GeneFlowEncryptedData
+Compiler Version: v0.8.26+commit.6cad0df6
+EVM Version: paris
+Optimization: Enabled
+Optimization Runs: 200
+viaIR: false
+
+VERIFICATION STEPS:
+1. Go to https://testnet.neroscan.io/address/0x344eb6338E62d207077E53C525bAA6B2A5Bb17ba
+2. Click on the "Contract" tab
+3. Click "Verify & Publish"
+4. Fill in the exact settings above
+5. Use the exact contract code from flattened.sol
+
+IMPORTANT VERIFICATION NOTES:
+- The contract was compiled with Solidity v0.8.26+commit.6cad0df6
+- Optimization: Enabled with 200 runs
+- EVM Version: paris
+- viaIR: Disabled (IR-based code generation)
+
+If verification fails with bytecode mismatch:
+1. Try verifying with optimization turned off
+2. Try different EVM versions (paris, london, etc.)
+3. Try different optimization runs (e.g., 1, 200, 1000)
+4. Try toggling viaIR setting
+5. Contact NERO team for manual verification if needed
+
+EXACT COMMAND USED FOR DEPLOYMENT:
+npx hardhat run contracts/scripts/deploy-nero.js --network nero

@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Hardhat
+/artifacts
+/cache
+/contracts/artifacts
+/contracts/cache
+/typechain
+/typechain-types
+/contracts/artifacts*
+/contracts/cache*
+
+# Deployment files
+/deployments
