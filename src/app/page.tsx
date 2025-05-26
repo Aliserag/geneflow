@@ -8,6 +8,9 @@ import { createSampleGeneticDataFile, stringToArrayBuffer, generateSample23andMe
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 
+// Nero contract address
+const NERO_CONTRACT_ADDRESS = "0x344eb6338E62d207077E53C525bAA6B2A5Bb17ba";
+
 function toHexString(byteArray: Uint8Array) {
   return Array.from(byteArray, (byte) => {
     return ("0" + (byte & 0xff).toString(16)).slice(-2);
@@ -75,6 +78,8 @@ export default function Home() {
   // Add these state variables to track report generation status
   const [reportsGenerating, setReportsGenerating] = useState<boolean>(false);
   const [generatedReportTypes, setGeneratedReportTypes] = useState<Set<string>>(new Set());
+  // Add a state variable for the connected network
+  const [connectedNetwork, setConnectedNetwork] = useState<string | null>(null);
 
   // MetaMask connect and key derivation
   const connectWalletAndDeriveKey = async () => {
@@ -86,14 +91,41 @@ export default function Home() {
         return;
       }
       const provider = new ethers.BrowserProvider(window.ethereum as unknown as ethers.Eip1193Provider);
+      
+      // Check current network
+      const network = await provider.getNetwork();
+      const chainIdNum = Number(network.chainId);
+      console.log("Connected to network with chain ID:", chainIdNum);
+      
+      // Set the connected network
+      if (chainIdNum === 689) {
+        setConnectedNetwork("NERO");
+      } else if (chainIdNum === 545) { // Flow testnet
+        setConnectedNetwork("FLOW");
+      } else {
+        setConnectedNetwork("UNKNOWN");
+      }
+      
+      // Get accounts
       const accounts = await provider.send("eth_requestAccounts", []);
       const address = accounts[0];
       setWalletAddress(address);
       const signer = await provider.getSigner();
       
-      // Initialize contract
+      // Select the appropriate contract address based on the network
+      let contractAddress = contractInfo.address; // Default to Flow testnet
+      
+      // If on Nero testnet, use the Nero contract address
+      if (chainIdNum === 689) {
+        contractAddress = NERO_CONTRACT_ADDRESS;
+        console.log("Using Nero testnet contract:", contractAddress);
+      } else {
+        console.log("Using Flow testnet contract:", contractAddress);
+      }
+      
+      // Initialize contract with the appropriate address
       const geneFlowContract = new ethers.Contract(
-        contractInfo.address,
+        contractAddress,
         contractInfo.abi,
         signer
       );
@@ -207,11 +239,17 @@ export default function Home() {
         return;
       }
 
-      // Check if on Flow testnet (chain ID 545)
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      console.log("Current chain ID:", chainId);
-      if (chainId !== '0x221') { // 0x221 is hex for 545
-        setEncryptionStatus("Please switch to Flow testnet (Chain ID: 545) in MetaMask");
+      // Check network using the provider to get both hex and decimal chain ID
+      const provider = new ethers.BrowserProvider(window.ethereum as unknown as ethers.Eip1193Provider);
+      const network = await provider.getNetwork();
+      const chainIdNum = Number(network.chainId);
+      
+      console.log("Current chain ID (decimal):", chainIdNum);
+      console.log("Current chain ID (hex):", `0x${chainIdNum.toString(16)}`);
+      
+      // Check if we're on a supported network (Flow 545 or Nero 689)
+      if (chainIdNum !== 545 && chainIdNum !== 689) {
+        setEncryptionStatus("Please switch to Flow testnet (Chain ID: 545) or Nero testnet (Chain ID: 689) in MetaMask");
         setStoring(false);
         return;
       }
@@ -220,8 +258,15 @@ export default function Home() {
       setEncryptionStatus("Requesting transaction from MetaMask. Please check your wallet popup...");
       
       // Get current account
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as string[];
+      const accounts = await provider.send("eth_requestAccounts", []);
       const from = accounts[0];
+      
+      // Determine contract address based on current network
+      const contractAddress = chainIdNum === 689 
+        ? NERO_CONTRACT_ADDRESS
+        : contractInfo.address;
+      
+      console.log("Using contract address:", contractAddress);
       
       // Encode the function call using ethers
       const ABI = ["function storeData(bytes data)"];
@@ -231,7 +276,7 @@ export default function Home() {
       // Prepare transaction parameters
       const txParams = {
         from: from,
-        to: contractInfo.address,
+        to: contractAddress,
         data: data,
         gas: "0x" + (3000000).toString(16), // Convert gas limit to hex directly
       };
@@ -247,9 +292,14 @@ export default function Home() {
       console.log("Transaction submitted:", txHash);
       setEncryptionStatus(`Transaction submitted! Hash: ${txHash.slice(0, 10)}... Waiting for confirmation...`);
       
+      // Determine RPC URL based on network
+      const rpcUrl = chainIdNum === 689
+        ? "https://rpc-testnet.nerochain.io"
+        : (process.env.NEXT_PUBLIC_RPC_URL || "https://testnet.evm.nodes.onflow.org");
+      
       // Wait for transaction receipt
-      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_RPC_URL || "https://testnet.evm.nodes.onflow.org");
-      const receipt = await provider.waitForTransaction(txHash);
+      const provider2 = new ethers.JsonRpcProvider(rpcUrl);
+      const receipt = await provider2.waitForTransaction(txHash);
       
       console.log("Transaction confirmed:", receipt);
       setEncryptionStatus("Success! Your data is now securely stored on the blockchain.");
@@ -293,7 +343,17 @@ export default function Home() {
   const deleteStoredData = async () => {
     if (!contract) return;
     try {
-      setEncryptionStatus("Deleting your stored data. Please confirm the transaction in MetaMask...");
+      // Check current chain ID to determine which network we're on
+      const provider = new ethers.BrowserProvider(window.ethereum as unknown as ethers.Eip1193Provider);
+      const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
+      
+      console.log("Current chain ID for deletion (decimal):", chainId);
+      
+      // Create appropriate message based on network
+      const networkName = chainId === 689 ? "Nero" : "Flow";
+      setEncryptionStatus(`Deleting your stored data from ${networkName} testnet. Please confirm the transaction in MetaMask...`);
+      
       const tx = await contract.deleteData();
       setEncryptionStatus("Transaction submitted. Waiting for confirmation...");
       await tx.wait();
@@ -671,8 +731,8 @@ export default function Home() {
   // Dashboard component
   const Dashboard = () => {
     const [showDetailedReport, setShowDetailedReport] = useState<boolean>(false);
-    
-    return (
+
+  return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
         <div className="border-b border-gray-100">
           <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50">
@@ -1044,6 +1104,7 @@ export default function Home() {
     setHasStoredData(false);
     setEncryptionStatus(null);
     setDecryptedData(null);
+    setConnectedNetwork(null);
     // Clear any genetic reports
     setGeneticReports({
       summary: null,
@@ -1067,7 +1128,16 @@ export default function Home() {
             <span className="text-sm font-medium text-gray-700 mr-3">
               {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
             </span>
-            <button 
+            {connectedNetwork && (
+              <span className={`text-xs px-2 py-1 rounded mr-2 ${
+                connectedNetwork === "NERO" 
+                  ? "bg-purple-100 text-purple-800" 
+                  : "bg-blue-100 text-blue-800"
+              }`}>
+                {connectedNetwork}
+              </span>
+            )}
+            <button
               onClick={disconnectWallet}
               className="text-xs text-red-600 hover:text-red-800"
             >
@@ -1085,7 +1155,7 @@ export default function Home() {
           <p className="text-lg text-gray-600 mx-auto max-w-xl">
             Secure, private, encrypted and anonymized. Discover you.
           </p>
-        </header>
+      </header>
 
         {/* Global Search Bar - Only show when connected and has data */}
         {walletAddress && decryptedData && (
@@ -1099,7 +1169,7 @@ export default function Home() {
                   placeholder="Ask anything about your genes or SNPs..." 
                   className="flex-1 px-4 py-3 border border-gray-300 rounded-l-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300"
                 />
-                <button 
+                <button
                   type="submit"
                   disabled={isSearching}
                   className="bg-blue-600 text-white px-6 py-3 rounded-r-lg hover:bg-blue-700 flex items-center justify-center"
@@ -1200,7 +1270,7 @@ export default function Home() {
         ) : (
           <main className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
             {/* Status Message */}
-            {encryptionStatus && (
+                {encryptionStatus && (
               <div className="px-6 py-3 bg-blue-50 border-b border-blue-100">
                 <p className="text-sm text-blue-700">{encryptionStatus}</p>
               </div>
@@ -1344,8 +1414,8 @@ export default function Home() {
                           >
                             Encrypt Data
                           </button>
-                        ) : (
-                          <>
+            ) : (
+              <>
                             <div className="flex items-center mt-2 mb-4">
                               <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
                               <p className="text-sm text-gray-700">Encryption complete</p>
@@ -1357,9 +1427,9 @@ export default function Home() {
                             >
                               {storing ? "Storing on-chain..." : "Store On-Chain"}
                             </button>
-                          </>
-                        )}
-                      </div>
+              </>
+            )}
+          </div>
                     )}
                   </div>
                 </div>
@@ -1397,20 +1467,20 @@ export default function Home() {
               </div>
               <h3 className="font-medium text-gray-800 mb-1">Instant Q&A</h3>
               <p className="text-sm text-gray-600">Ask questions, get answers from your genetics in real-time.</p>
-            </div>
-          </section>
+        </div>
+        </section>
         )}
         
         <footer className="mt-12 text-center">
           <p className="text-xs text-gray-500">
-            &copy; {new Date().getFullYear()} Geneflow. All rights reserved.
+        &copy; {new Date().getFullYear()} Geneflow. All rights reserved.
             <span className="mx-2">|</span>
             <a href="#" className="hover:text-blue-600 transition">Privacy Policy</a>
             <span className="mx-2">|</span>
             <a href="#" className="hover:text-blue-600 transition">Terms of Service</a>
           </p>
-        </footer>
-      </div>
+      </footer>
+    </div>
     </div>
   );
 }
