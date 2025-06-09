@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { ethers } from "ethers";
+import JSZip from "jszip";
 import contractInfo from "../contracts/GeneFlowEncryptedData.json";
 import { createSampleGeneticDataFile, stringToArrayBuffer, generateSample23andMeData } from "../utils/sampleGeneticData";
 import ReactMarkdown from 'react-markdown';
@@ -18,6 +19,8 @@ function toHexString(byteArray: Uint8Array) {
 interface EthereumProvider {
   isMetaMask?: boolean;
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on?: (eventName: string, handler: (data: any) => void) => void;
+  removeListener?: (eventName: string, handler: (data: any) => void) => void;
 }
 
 declare global {
@@ -75,6 +78,115 @@ export default function Home() {
   // Add these state variables to track report generation status
   const [reportsGenerating, setReportsGenerating] = useState<boolean>(false);
   const [generatedReportTypes, setGeneratedReportTypes] = useState<Set<string>>(new Set());
+  const [loadingDemo, setLoadingDemo] = useState(false);
+  const [currentNetwork, setCurrentNetwork] = useState<string | null>(null);
+  const [networkError, setNetworkError] = useState<string | null>(null);
+
+  // Flow Testnet configuration
+  const FLOW_TESTNET_CONFIG = {
+    chainId: '0x221', // 545 in hex
+    chainName: 'Flow Testnet',
+    nativeCurrency: {
+      name: 'FLOW',
+      symbol: 'FLOW',
+      decimals: 18,
+    },
+    rpcUrls: ['https://testnet.evm.nodes.onflow.org'],
+    blockExplorerUrls: ['https://evm-testnet.flowscan.io'],
+  };
+
+  // Network detection and switching functions
+  const detectNetwork = async () => {
+    if (!window.ethereum) return null;
+    
+    try {
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const chainIdString = typeof chainId === 'string' ? chainId : String(chainId);
+      setCurrentNetwork(chainIdString);
+      return chainIdString;
+    } catch (error) {
+      console.error('Error detecting network:', error);
+      return null;
+    }
+  };
+
+  const switchToFlowTestnet = async () => {
+    if (!window.ethereum) {
+      setNetworkError('MetaMask is not installed');
+      return false;
+    }
+
+    try {
+      // First try to switch to the network
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: FLOW_TESTNET_CONFIG.chainId }],
+      });
+      
+      setCurrentNetwork(FLOW_TESTNET_CONFIG.chainId);
+      setNetworkError(null);
+      return true;
+    } catch (switchError: any) {
+      // If the network doesn't exist, add it
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [FLOW_TESTNET_CONFIG],
+          });
+          
+          setCurrentNetwork(FLOW_TESTNET_CONFIG.chainId);
+          setNetworkError(null);
+          return true;
+        } catch (addError) {
+          console.error('Error adding Flow Testnet:', addError);
+          setNetworkError('Failed to add Flow Testnet to MetaMask');
+          return false;
+        }
+      } else {
+        console.error('Error switching to Flow Testnet:', switchError);
+        setNetworkError('Failed to switch to Flow Testnet');
+        return false;
+      }
+    }
+  };
+
+  const getNetworkName = (chainId: string) => {
+    switch (chainId) {
+      case '0x1': return 'Ethereum Mainnet';
+      case '0x5': return 'Goerli Testnet';
+      case '0x89': return 'Polygon Mainnet';
+      case '0x13881': return 'Polygon Mumbai';
+      case '0x221': return 'Flow Testnet';
+      default: return `Unknown Network (${chainId})`;
+    }
+  };
+
+  // Listen for network changes
+  useEffect(() => {
+    if (window.ethereum && window.ethereum.on) {
+      const handleChainChanged = (chainId: string) => {
+        const chainIdString = typeof chainId === 'string' ? chainId : String(chainId);
+        setCurrentNetwork(chainIdString);
+        if (chainIdString !== FLOW_TESTNET_CONFIG.chainId) {
+          setNetworkError(`Please switch to Flow Testnet. Currently on: ${getNetworkName(chainIdString)}`);
+        } else {
+          setNetworkError(null);
+        }
+      };
+
+      window.ethereum.on('chainChanged', handleChainChanged);
+      
+      // Detect initial network
+      detectNetwork();
+
+      return () => {
+        if (window.ethereum?.removeListener) {
+          window.ethereum.removeListener('chainChanged', handleChainChanged);
+        }
+      };
+    }
+  }, []);
 
   // MetaMask connect and key derivation
   const connectWalletAndDeriveKey = async () => {
@@ -85,6 +197,29 @@ export default function Home() {
         setConnecting(false);
         return;
       }
+
+      // Detect current network
+      const chainId = await detectNetwork();
+      
+      // Check if on Flow Testnet
+      if (chainId !== FLOW_TESTNET_CONFIG.chainId) {
+        setNetworkError(`Wrong network detected: ${getNetworkName(chainId || 'unknown')}. Please switch to Flow Testnet.`);
+        
+        // Prompt user to switch
+        const shouldSwitch = confirm(`You're currently on ${getNetworkName(chainId || 'unknown')}. Would you like to switch to Flow Testnet automatically?`);
+        
+        if (shouldSwitch) {
+          const switched = await switchToFlowTestnet();
+          if (!switched) {
+            setConnecting(false);
+            return;
+          }
+        } else {
+          setConnecting(false);
+          return;
+        }
+      }
+
       const provider = new ethers.BrowserProvider(window.ethereum as unknown as ethers.Eip1193Provider);
       const accounts = await provider.send("eth_requestAccounts", []);
       const address = accounts[0];
@@ -120,6 +255,9 @@ export default function Home() {
       );
       setEncryptionKey(key);
       setKeyHex(toHexString(new Uint8Array(hashBuffer)));
+      
+      // Clear any network errors
+      setNetworkError(null);
       
       // Set the appropriate step based on whether user has data
       if (hasData) {
@@ -208,10 +346,10 @@ export default function Home() {
       }
 
       // Check if on Flow testnet (chain ID 545)
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      console.log("Current chain ID:", chainId);
-      if (chainId !== '0x221') { // 0x221 is hex for 545
-        setEncryptionStatus("Please switch to Flow testnet (Chain ID: 545) in MetaMask");
+      const chainId = await detectNetwork();
+      if (chainId !== FLOW_TESTNET_CONFIG.chainId) {
+        setNetworkError(`Please switch to Flow Testnet to store data. Currently on: ${getNetworkName(chainId || 'unknown')}`);
+        setEncryptionStatus(null);
         setStoring(false);
         return;
       }
@@ -256,6 +394,9 @@ export default function Home() {
       setHasStoredData(true);
       setCurrentStep(5);
       
+      // Clear any network errors
+      setNetworkError(null);
+      
       // Show dashboard after successful storage
       if (uploadedFile && encryptedData) {
         try {
@@ -289,21 +430,75 @@ export default function Home() {
     setStoring(false);
   };
 
-  // Delete stored data
+  // Delete stored data with improved frontend updates
   const deleteStoredData = async () => {
     if (!contract) return;
+    
+    // Show confirmation dialog
+    const confirmed = confirm("Are you sure you want to delete your genetic data from the blockchain? This action cannot be undone.");
+    if (!confirmed) return;
+
     try {
       setEncryptionStatus("Deleting your stored data. Please confirm the transaction in MetaMask...");
+      
+      // Check network before transaction
+      const chainId = await detectNetwork();
+      if (chainId !== FLOW_TESTNET_CONFIG.chainId) {
+        setNetworkError(`Please switch to Flow Testnet to delete data. Currently on: ${getNetworkName(chainId || 'unknown')}`);
+        setEncryptionStatus(null);
+        return;
+      }
+
       const tx = await contract.deleteData();
       setEncryptionStatus("Transaction submitted. Waiting for confirmation...");
       await tx.wait();
+      
+      // Update all relevant state immediately after successful deletion
       setEncryptionStatus("Your data has been successfully deleted from the blockchain.");
       setHasStoredData(false);
       setEncryptedData(null);
+      setDecryptedData(null);
+      setUploadedFile(null);
       setCurrentStep(2);
+      setShowDashboard(false);
+      
+      // Clear all genetic reports
+      setGeneticReports({
+        summary: null,
+        methylation: null,
+        carrier: null,
+        nutrition: null,
+        exercise: null,
+        medication: null,
+        ancestry: null,
+        diseaseRisk: null
+      });
+      
+      // Clear chat history
+      setChatHistory([]);
+      
+      // Reset report generation state
+      setGeneratedReportTypes(new Set());
+      setReportsGenerating(false);
+      setIsGeneratingReport(false);
+      
+      // Clear search state
+      setSearchQuery('');
+      setIsSearching(false);
+      
+      // Show success message for a few seconds then clear
+      setTimeout(() => {
+        setEncryptionStatus(null);
+      }, 3000);
+      
     } catch (error) {
       console.error("Deletion error:", error);
       setEncryptionStatus("Failed to delete data. Please try again.");
+      
+      // Clear error message after a few seconds
+      setTimeout(() => {
+        setEncryptionStatus(null);
+      }, 5000);
     }
   };
 
@@ -620,6 +815,69 @@ export default function Home() {
     } finally {
       setIsSearching(false);
       setSearchQuery('');
+    }
+  };
+
+  // Load demo data from the repository zip file
+  const loadDemoData = async () => {
+    setLoadingDemo(true);
+    try {
+      // Fetch the demo zip file from the repository
+      const response = await fetch('/geneflow_data_testing_23andMe_format.zip');
+      if (!response.ok) {
+        throw new Error('Failed to fetch demo data');
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const zip = new JSZip();
+      const zipContent = await zip.loadAsync(arrayBuffer);
+      
+      // Look for genetic data files in the ZIP
+      let geneticDataText = '';
+      let fileName = '';
+      
+      for (const zipFileName in zipContent.files) {
+        const file = zipContent.files[zipFileName];
+        
+        // Skip directories
+        if (file.dir) continue;
+        
+        // Check if this looks like genetic data
+        if (zipFileName.endsWith('.txt') || zipFileName.includes('genome') || zipFileName.includes('dna')) {
+          const content = await file.async('text');
+          
+          // Check for genetic markers in the content
+          if (content.includes('rs') || /rs\d+/.test(content)) {
+            geneticDataText = content;
+            fileName = zipFileName;
+            break;
+          }
+        }
+      }
+      
+      if (!geneticDataText) {
+        throw new Error('No genetic data found in demo file');
+      }
+      
+      // Create a File object from the extracted data
+      const blob = new Blob([geneticDataText], { type: 'text/plain' });
+      const demoFile = new File([blob], fileName, { type: 'text/plain' });
+      
+      setUploadedFile(demoFile);
+      
+      // Store the decrypted data for reports
+      const encoder = new TextEncoder();
+      const buffer = encoder.encode(geneticDataText).buffer;
+      setDecryptedData(buffer as ArrayBuffer);
+      
+      setCurrentStep(3);
+      setEncryptionStatus(`Demo genetic data loaded successfully. Ready for encryption.`);
+      
+    } catch (error) {
+      console.error('Error loading demo data:', error);
+      setEncryptionStatus('Failed to load demo data. Please try again or upload your own file.');
+    } finally {
+      setLoadingDemo(false);
     }
   };
 
@@ -1067,12 +1325,54 @@ export default function Home() {
             <span className="text-sm font-medium text-gray-700 mr-3">
               {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
             </span>
+            {currentNetwork && (
+              <span className={`text-xs px-2 py-1 rounded-full mr-2 ${
+                currentNetwork === FLOW_TESTNET_CONFIG.chainId 
+                  ? 'bg-green-100 text-green-700' 
+                  : 'bg-red-100 text-red-700'
+              }`}>
+                {getNetworkName(currentNetwork)}
+              </span>
+            )}
             <button 
               onClick={disconnectWallet}
               className="text-xs text-red-600 hover:text-red-800"
             >
               Disconnect
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Network Error Banner */}
+      {networkError && (
+        <div className="fixed top-20 left-4 right-4 z-10 max-w-4xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-red-800">Network Issue</p>
+                <p className="text-sm text-red-700">{networkError}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={switchToFlowTestnet}
+                className="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 transition"
+              >
+                Switch Network
+              </button>
+              <button
+                onClick={() => setNetworkError(null)}
+                className="text-red-600 hover:text-red-800"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1289,6 +1589,38 @@ export default function Home() {
 
                     {!uploadedFile ? (
                       <div>
+                        {/* Demo Data Section - Prominent placement */}
+                        <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="text-sm font-medium text-blue-900 mb-1">Try GeneFlow with Demo Data</h3>
+                              <p className="text-xs text-blue-700">
+                                Experience the full platform with real genetic data samples
+                              </p>
+                            </div>
+                            <button
+                              onClick={loadDemoData}
+                              disabled={loadingDemo}
+                              className="px-4 py-2 bg-blue-600 text-white font-medium text-sm rounded-lg hover:bg-blue-700 transition focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                              {loadingDemo ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  Loading...
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                  </svg>
+                                  Load Demo
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* File Upload Area */}
                         <div 
                           {...getRootProps()} 
                           className={`border-2 border-dashed rounded-lg p-10 transition cursor-pointer flex flex-col items-center justify-center ${
@@ -1305,12 +1637,17 @@ export default function Home() {
                           <p className="text-gray-500 text-sm">or <span className="text-blue-600">browse files</span></p>
                           <p className="text-gray-400 text-xs mt-2">ZIP file from 23andMe or Ancestry (max 20MB)</p>
                         </div>
-                        <div className="mt-4 text-center">
+                        
+                        {/* Alternative Options */}
+                        <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
                           <button
                             onClick={useSampleGeneticData}
-                            className="text-blue-600 underline text-sm hover:text-blue-800"
+                            className="text-gray-600 underline text-sm hover:text-gray-800 flex items-center gap-1"
                           >
-                            Use sample genetic data for testing
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                            </svg>
+                            Generate sample data for testing
                           </button>
                         </div>
                       </div>
